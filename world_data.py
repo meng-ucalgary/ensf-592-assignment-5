@@ -8,6 +8,8 @@
 # Remember to include docstrings and comments.
 
 import pandas as pd
+import colors
+import os
 
 
 def get_user_input(valid_options):
@@ -26,8 +28,7 @@ def get_user_input(valid_options):
         try:
             # if user has not entered a valid UN Sub-Region, throw ValueError
             if user_input not in valid_options:
-                raise ValueError(
-                    "\nYou must enter a valid UN Sub-Region name.")
+                raise ValueError("\n{0}You must enter a valid UN Sub-Region name.{1}".format(colors.red, colors.reset))
 
             # if user has entered a valid UN Sub-Region, return the user_input
             else:
@@ -47,22 +48,35 @@ def find_null(x):
         Return:
             None
     """
-    x = pd.Series(x)
 
     # compare the size without and with dropping NaN to check missing data
     if x.dropna().size == x.size:
-        print("\n\nThere are no missing sq km values for this sub-region.")
+        print("\n{0}There are no missing sq km values for this sub-region.{1}".format(colors.green, colors.reset))
 
     else:
-        print("\n\nSq Km measurements are missing for: \n")
+        # print the missing values using masking operation
+        print("\n{0}Sq Km measurements are missing for:{1}".format(colors.red, colors.reset))
         print(x[x.isnull()])
 
 
 def main():
+    # Windows Console does not recognize the ANSI escape sequence from external programs
+    #
+    # using os.system('') exploits a bug in cmd.exe, where cmd.exe is failing to disable the VT Mode,
+    # and thus printing the colored output rather than the ANSI sequence itself
+    #
+    # For more information of this bug, go to https://bugs.python.org/issue30075
+    #
+    # This line (os.system("")) is added to make sure the colored output is printed when this application
+    # is started in windows default console.
+    os.system("")
+
+
+
     # Stage 1: Import data
     # --------------------------------------------------------------------------------
     # printing the program header
-    print("\nENSF 592 World Data")
+    print("\n{0}ENSF 592 World Data{1}".format(colors.yellow, colors.reset))
 
     # reading the world data as is from the source
     world_data_raw = pd.read_excel(r'Assign5Data.xlsx', index_col=[1, 2, 0])
@@ -70,41 +84,53 @@ def main():
     # sorting the indexes of world data
     world_data_sorted = world_data_raw.sort_index()
 
+
     # Stage 2: Request user input
     # --------------------------------------------------------------------------------
     # get a valid sub-region from the user
     chosen_sub_region = get_user_input(
         world_data_sorted.index.get_level_values(1))
 
+
     # Stage 3: Find any missing sq km data values for the chosen sub-region
     # --------------------------------------------------------------------------------
+    # creating an object of IndexSlice
+    idx = pd.IndexSlice
+
     # filtering the sorted world data based on the sub-region entered by user
-    world_data_sorted_subregion = world_data_sorted[world_data_sorted.index.get_level_values(
-        "UN Sub-Region") == chosen_sub_region]
+    world_data_sorted_subregion = world_data_sorted.loc[idx[:, chosen_sub_region, :], idx["Sq Km": "2020 Pop"]]
+
+    # alternate way of doing the above operation it without IndexSlice (using Masks)
+    # world_data_sorted_subregion = world_data_sorted[world_data_sorted.index.get_level_values("UN Sub-Region") == chosen_sub_region]
+
+    # print the data without truncation
+    # with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None, 'display.max_colwidth', -1):  # more options can be specified also
+    #   print(world_data_sorted_subregion)
 
     # print if there is any missing values in the 'Sq Km' column
-    find_null(world_data_sorted_subregion.loc[:, "Sq Km"])
+    find_null(world_data_sorted_subregion.loc[idx[:], idx["Sq Km"]])
+
 
     # Stage 4: Calculations and dataset printing for the chosen sub-region
     # --------------------------------------------------------------------------------
-    print("\n\nCalculating change in population and latest density...\n")
-    world_data_sorted_subregion.loc[:, "Delta Pop"] = world_data_sorted_subregion.loc[:,
-                                                                                      "2020 Pop"] - world_data_sorted_subregion.loc[:, "2000 Pop"]
-    world_data_sorted_subregion.loc[:, "Pop Density"] = world_data_sorted_subregion.loc[:,
-                                                                                        "2020 Pop"] / world_data_sorted_subregion.loc[:, "Sq Km"]
+    print("\n\n{0}Calculating change in population and latest density...{1}".format(colors.cyan, colors.reset))
+    world_data_sorted_subregion.loc[:, "Delta Pop"] = world_data_sorted_subregion.loc[:,"2020 Pop"] - world_data_sorted_subregion.loc[:, "2000 Pop"]
+    world_data_sorted_subregion.loc[:, "Pop Density"] = world_data_sorted_subregion.loc[:,"2020 Pop"] / world_data_sorted_subregion.loc[:, "Sq Km"]
 
     print(world_data_sorted_subregion)
 
-    print("\n\nNumber of threatened species in each country of the sub-region:\n")
-    print(
-        world_data_sorted_subregion.loc[:, ("Plants (T)", "Fish (T)", "Birds (T)", "Mammals (T)")])
 
-    print("\n\nThe calculated sq km area per number of threatened species in each country is:\n")
+    print("\n\n{0}Number of threatened species in each country of the sub-region:{1}".format(colors.cyan, colors.reset))
 
-    sum_of_threatened_species = world_data_sorted_subregion.loc[:, "Plants (T)"] + world_data_sorted_subregion.loc[:, "Fish (T)"] + \
-        world_data_sorted_subregion.loc[:, "Birds (T)"] + \
-        world_data_sorted_subregion.loc[:, "Mammals (T)"]
-    print(world_data_sorted_subregion.loc[:, "Sq Km"] / sum_of_threatened_species)
+    # filtering only the threatened species columns
+    world_data_sorted_subregion_threatened = world_data_sorted_subregion.loc[idx[:], idx["Plants (T)" : "Mammals (T)"]]
+    print(world_data_sorted_subregion_threatened)
+
+
+    print("\n\n{0}The calculated sq km area per number of threatened species in each country is:{1}".format(colors.cyan, colors.reset))
+
+    # using the computational method sum()
+    print(world_data_sorted_subregion.loc[:, "Sq Km"] / world_data_sorted_subregion_threatened.sum(axis=1))
 
 
 if __name__ == '__main__':
